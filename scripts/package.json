@@ -1,0 +1,14 @@
+{
+  "name": "animation-to-mp4",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Render a Stage/Sprite timeline animation to MP4 with its Web Audio soundtrack baked in.",
+  "bin": { "animation-to-mp4": "render.mjs" },
+  "dependencies": {
+    "@babel/standalone": "^7",
+    "puppeteer-core": "^23",
+    "react": "^18",
+    "react-dom": "^18"
+  }
+}
