@@ -29,7 +29,7 @@ try {
 
 // ── args ──────────────────────────────────────────────────────────────────--
 function parseArgs(argv) {
-  const a = { fps: null, audio: 'auto', scale: 1, crf: 18, keep: false };
+  const a = { fps: null, audio: 'auto', scale: null, crf: null, quality: 'original', preset: 'source', bg: null, keep: false };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i];
     const v = argv[i + 1];
@@ -40,6 +40,9 @@ function parseArgs(argv) {
     else if (k === '--audio') { a.audio = v; i++; }
     else if (k === '--scale') { a.scale = +v; i++; }
     else if (k === '--crf') { a.crf = +v; i++; }
+    else if (k === '--quality' || k === '-q') { a.quality = (v || '').toLowerCase(); i++; }
+    else if (k === '--preset' || k === '--format') { a.preset = (v || '').toLowerCase(); i++; }
+    else if (k === '--bg') { a.bg = v; i++; }
     else if (k === '--chrome') { a.chrome = v; i++; }
     else if (k === '--keep') { a.keep = true; }
     else if (k === '--help' || k === '-h') { a.help = true; }
@@ -50,13 +53,65 @@ const args = parseArgs(process.argv);
 if (args.help || !args.input) {
   console.log('Usage: node render.mjs --input <dir-or-.dc.html> [--out out.mp4]\n' +
     '  --component <Name>  global component to mount (auto-detected otherwise)\n' +
-    '  --fps <n>           frames per second (default: Stage fps or 30)\n' +
+    '  --quality <tier>    original | 1080p | 4k (default original)\n' +
+    '  --fps <n>           frames per second, e.g. 24 30 60 (default: Stage fps or 30)\n' +
+    '  --preset <name>     output canvas: source | youtube | x | stories | reels |\n' +
+    '                      tiktok | square | post | telegram | portrait (default source)\n' +
     '  --audio auto|off    capture the soundtrack if present (default auto)\n' +
-    '  --scale <n>         device pixel ratio, e.g. 2 (default 1)\n' +
-    '  --crf <n>           x264 quality, lower is better (default 18)\n' +
+    '  --bg <color>        pad colour for a reshaped canvas (default: scene background)\n' +
+    '  --scale <n>         force device pixel ratio (default: derived from quality)\n' +
+    '  --crf <n>           force x264 quality, lower is better (default: from quality)\n' +
     '  --chrome <path>     explicit Chrome/Chromium executable\n' +
     '  --keep              keep the temp work dir');
   process.exit(args.help ? 0 : 1);
+}
+
+// ── output presets ──────────────────────────────────────────────────────────
+// Each platform is a target width x height. A non-source preset fits the native
+// frame into this shape and pads the rest with the scene's own background, since
+// a fixed Stage cannot reflow its layout to a new aspect ratio. Aspect aliases
+// (16:9, 9:16, 1:1, 4:5) map to the same canvases.
+const PRESETS = {
+  source: null,
+  youtube: [1920, 1080], x: [1920, 1080], twitter: [1920, 1080], landscape: [1920, 1080], '16:9': [1920, 1080],
+  stories: [1080, 1920], reels: [1080, 1920], tiktok: [1080, 1920], shorts: [1080, 1920], vertical: [1080, 1920], '9:16': [1080, 1920],
+  square: [1080, 1080], post: [1080, 1080], instagram: [1080, 1080], telegram: [1080, 1080], '1:1': [1080, 1080],
+  portrait: [1080, 1350], '4:5': [1080, 1350],
+};
+// Quality tier -> target shorter edge (null keeps the canvas as-is) and a crf.
+const QUALITY_SHORT = { original: null, '1080p': 1080, '1080': 1080, hd: 1080, '4k': 2160, '2160p': 2160, uhd: 2160 };
+const QUALITY_CRF = { original: 18, '1080p': 20, '1080': 20, hd: 20, '4k': 16, '2160p': 16, uhd: 16 };
+
+if (!(args.quality in QUALITY_SHORT)) {
+  console.error('Unknown --quality "' + args.quality + '". Use original, 1080p, or 4k.');
+  process.exit(2);
+}
+if (!(args.preset in PRESETS)) {
+  console.error('Unknown --preset "' + args.preset + '". Options: ' + Object.keys(PRESETS).join(', '));
+  process.exit(2);
+}
+
+const evenDim = (n) => Math.max(2, Math.round(n / 2) * 2);
+
+// Final output size from the native dimensions, the platform preset (aspect),
+// and the quality tier (which scales the shorter edge to 1080 or 2160).
+function targetDims(nativeW, nativeH, preset, quality) {
+  const p = PRESETS[preset];
+  let w = p ? p[0] : nativeW;
+  let h = p ? p[1] : nativeH;
+  const short = QUALITY_SHORT[quality];
+  if (short) { const k = short / Math.min(w, h); w *= k; h *= k; }
+  return [evenDim(w), evenDim(h)];
+}
+
+// Turn a computed CSS colour into something ffmpeg's pad filter accepts.
+function rgbToFfColor(css) {
+  if (!css) return null;
+  const m = css.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?/i);
+  if (!m) return null;
+  if (m[4] !== undefined && +m[4] === 0) return null;
+  const hex = (n) => (+n).toString(16).padStart(2, '0');
+  return '0x' + hex(m[1]) + hex(m[2]) + hex(m[3]);
 }
 
 // ── locate the scene files ────────────────────────────────────────────────--
@@ -330,7 +385,17 @@ function ffmpeg(fpArgs) {
   const N = Math.round(duration * fps);
   console.log('animation: ' + W + 'x' + H + ' @ ' + fps + 'fps, ' + duration + 's (' + N + ' frames), component ' + project.component);
 
-  await page.setViewport({ width: W, height: H + 60, deviceScaleFactor: args.scale });
+  const [TW, TH] = targetDims(W, H, args.preset, args.quality);
+  const crf = args.crf != null ? args.crf : QUALITY_CRF[args.quality];
+  // Render at enough device pixels that scaling up to the target stays sharp;
+  // for downscales 1x is fine and ffmpeg does the resampling.
+  const dpr = args.scale != null ? args.scale
+    : Math.max(1, Math.min(3, Math.ceil(Math.min(TW, TH) / Math.min(W, H))));
+  const reshaped = TW !== W || TH !== H;
+  console.log('output: ' + TW + 'x' + TH + ' (' + args.quality +
+    (PRESETS[args.preset] ? ', ' + args.preset : '') + '), crf ' + crf + ', ' + dpr + 'x capture');
+
+  await page.setViewport({ width: W, height: H + 60, deviceScaleFactor: dpr });
   await page.waitForFunction(() => {
     const s = document.querySelector('svg[data-om-exportable-video-with-duration-secs]');
     return s && s.getAttribute('data-om-fonts-inlined') === 'true';
@@ -340,6 +405,21 @@ function ffmpeg(fpArgs) {
     '[data-omelette-chrome]{display:none!important;}' +
     'svg[data-om-exportable-video-with-duration-secs]{transform:none!important;position:fixed!important;left:0!important;top:0!important;box-shadow:none!important;margin:0!important;}'
   });
+
+  // Pad colour for a reshaped canvas: prefer the scene's own background so the
+  // letterbox reads as part of the design rather than a black bar.
+  let padColor = args.bg || null;
+  if (reshaped && !padColor) {
+    const css = await page.evaluate(() => {
+      const s = document.querySelector('svg[data-om-exportable-video-with-duration-secs]');
+      const fo = s && s.querySelector('foreignObject');
+      const root = fo && fo.firstElementChild;
+      const pick = (el) => { if (!el) return null; const c = getComputedStyle(el).backgroundColor; return c && c !== 'rgba(0, 0, 0, 0)' ? c : null; };
+      return pick(root) || pick(fo) || (s ? getComputedStyle(s).backgroundColor : null);
+    }).catch(() => null);
+    padColor = rgbToFfColor(css);
+  }
+  padColor = padColor || 'black';
 
   // 1) audio pass (real-time), if the scene makes sound
   let audioFile = null;
@@ -380,18 +460,22 @@ function ffmpeg(fpArgs) {
 
   // 3) mux
   const out = path.resolve(args.out || path.join(project.dir, project.component.replace(/[^\w.-]/g, '') + '.mp4'));
-  const even = "scale='trunc(iw/2)*2':'trunc(ih/2)*2'";
+  // Fit the captured frame into the target canvas preserving aspect, then pad
+  // the remainder so the output is exactly the requested size. For source +
+  // original this is a no-op scale and no padding.
+  const vf = 'scale=' + TW + ':' + TH + ':force_original_aspect_ratio=decrease:flags=lanczos,' +
+    'pad=' + TW + ':' + TH + ':(ow-iw)/2:(oh-ih)/2:color=' + padColor + ',setsar=1';
   const base = ['-y', '-framerate', String(fps), '-start_number', '0', '-i', path.join(framesDir, 'f_%05d.png')];
   if (audioFile) {
     ffmpeg([...base, '-i', audioFile, '-map', '0:v:0', '-map', '1:a:0',
-      '-c:v', 'libx264', '-preset', 'slow', '-crf', String(args.crf), '-pix_fmt', 'yuv420p', '-vf', even,
+      '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-vf', vf,
       '-movflags', '+faststart', '-c:a', 'aac', '-b:a', '192k', '-shortest', out]);
   } else {
-    ffmpeg([...base, '-c:v', 'libx264', '-preset', 'slow', '-crf', String(args.crf), '-pix_fmt', 'yuv420p', '-vf', even, '-movflags', '+faststart', out]);
+    ffmpeg([...base, '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-vf', vf, '-movflags', '+faststart', out]);
   }
 
   const size = (fs.statSync(out).size / 1e6).toFixed(2);
   if (!args.keep) { try { fs.rmSync(work, { recursive: true, force: true }); } catch {} }
   else console.log('work dir kept: ' + work);
-  console.log('\ndone: ' + out + ' (' + size + ' MB, ' + W + 'x' + H + ', ' + fps + 'fps, ' + duration + 's, audio ' + (audioFile ? 'yes' : 'no') + ')');
+  console.log('\ndone: ' + out + ' (' + size + ' MB, ' + TW + 'x' + TH + ', ' + fps + 'fps, ' + duration + 's, audio ' + (audioFile ? 'yes' : 'no') + ')');
 })().catch((e) => { console.error('FATAL', e && e.stack || e); process.exit(1); });

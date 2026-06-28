@@ -1,0 +1,34 @@
+{
+  "name": "animation-to-mp4",
+  "owner": {
+    "name": "cpz",
+    "url": "https://github.com/cpz"
+  },
+  "metadata": {
+    "description": "Render claude.ai/design timeline animations to mp4 with the Web Audio soundtrack baked in",
+    "version": "1.1.0"
+  },
+  "plugins": [
+    {
+      "name": "animation-to-mp4",
+      "source": "./",
+      "skills": "./",
+      "description": "Render a claude.ai/design Stage/Sprite timeline animation (animations.jsx plus a scene .jsx, usually wired through a .dc.html) to a real .mp4, with any procedural Web Audio soundtrack baked into the audio track. Asks for quality (original/1080p/4k), frame rate (24/30/60), and a platform aspect preset before rendering.",
+      "version": "1.1.0",
+      "author": {
+        "name": "cpz"
+      },
+      "homepage": "https://github.com/cpz/animation-to-mp4",
+      "license": "MIT",
+      "keywords": [
+        "video",
+        "mp4",
+        "animation",
+        "web-audio",
+        "ffmpeg",
+        "puppeteer",
+        "claude-design"
+      ]
+    }
+  ]
+}

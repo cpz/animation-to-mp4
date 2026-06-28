@@ -1,0 +1,20 @@
+{
+  "name": "animation-to-mp4",
+  "description": "Render a claude.ai/design Stage/Sprite timeline animation to a real .mp4 with any procedural Web Audio soundtrack baked into the audio track.",
+  "version": "1.1.0",
+  "author": {
+    "name": "cpz"
+  },
+  "homepage": "https://github.com/cpz/animation-to-mp4",
+  "repository": "https://github.com/cpz/animation-to-mp4",
+  "license": "MIT",
+  "keywords": [
+    "video",
+    "mp4",
+    "animation",
+    "web-audio",
+    "ffmpeg",
+    "puppeteer",
+    "claude-design"
+  ]
+}

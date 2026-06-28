@@ -34,7 +34,14 @@ them:
 
 ## Install
 
-Drop the folder into your skills directory and install the script deps once:
+Through the Claude Code plugin marketplace:
+
+```
+/plugin marketplace add cpz/animation-to-mp4
+/plugin install animation-to-mp4@animation-to-mp4
+```
+
+Or drop the folder into your skills directory directly:
 
 ```sh
 git clone https://github.com/cpz/animation-to-mp4 ~/.claude/skills/animation-to-mp4
@@ -42,6 +49,9 @@ cd ~/.claude/skills/animation-to-mp4/scripts && npm install
 ```
 
 On Windows the skills directory is `%USERPROFILE%\.claude\skills`.
+
+Either way, install the script deps once (`cd scripts && npm install`); a
+marketplace clone does not carry `node_modules`.
 
 Claude Code picks the skill up automatically and triggers it when you ask to
 convert or export a design animation to video. You can also run the renderer by
@@ -58,15 +68,21 @@ Flags (all optional):
 | flag | meaning |
 | --- | --- |
 | `--component <Name>` | global component to mount, if auto-detection misses it |
-| `--fps <n>` | frames per second (default: the scene's `<Stage fps>`, else 30) |
+| `--quality <tier>` | `original`, `1080p`, or `4k` output resolution (default `original`) |
+| `--fps <n>` | frames per second, e.g. `24` `30` `60` (default: the scene's `<Stage fps>`, else 30) |
+| `--preset <name>` | output canvas: `source`, `youtube`, `x`, `stories`, `reels`, `tiktok`, `square`, `post`, `telegram`, `portrait`, or an aspect alias like `9:16` (default `source`) |
 | `--audio auto\|off` | capture the soundtrack if present (default `auto`) |
-| `--scale <n>` | device pixel ratio, e.g. `2` for a crisp 2x render (default 1) |
-| `--crf <n>` | x264 quality, lower is better and bigger (default 18) |
+| `--bg <color>` | pad colour for a reshaped canvas (default: the scene background) |
+| `--scale <n>` | force capture device pixel ratio (default: derived from quality) |
+| `--crf <n>` | force x264 quality, lower is better and bigger (default: from quality) |
 | `--chrome <path>` | explicit Chrome/Chromium executable |
 | `--keep` | leave the temp work dir (frames, captured audio) for inspection |
 
 Width, height, and duration come from the mounted Stage, so you do not pass
-those. The renderer prints a summary when it finishes.
+those. `--quality` sets the output resolution (4k is captured at a higher pixel
+ratio so it stays sharp), and `--preset` reshapes the canvas to a platform aspect
+by fitting the native frame and padding with the scene background. The renderer
+prints a summary when it finishes.
 
 If the project holds more than one HTML document (common in a design project
 where only one file is the animation), pass the specific animation file rather

@@ -81,20 +81,61 @@ chosen file directly as `--input`. The renderer enforces the same rule: handed a
 directory with multiple HTML files it stops and lists them rather than picking
 one, so always resolve the choice first and pass the specific file.
 
+## Ask the output settings first
+
+Unless the user already pinned them, ask for the three output settings before
+rendering, in a single `AskUserQuestion` call carrying all three questions (it
+accepts up to four). Read the animation's native size and `fps` first (the
+renderer prints both, or read the scene's `<Stage>` props) so you can mark the
+choice that matches the source as recommended.
+
+**Quality** (header "Quality") maps to `--quality`:
+
+- *Original* (recommended) renders at the animation's native resolution. →
+  `--quality original`
+- *1080p* targets a 1080-class output tuned for social media. → `--quality 1080p`
+- *4K* targets a 2160-class output at maximum quality, captured sharp. →
+  `--quality 4k`
+
+**Frame rate** (header "FPS") maps to `--fps`. Offer `24`, `30`, `60`, and mark
+the value matching the scene's own `<Stage fps>` as recommended.
+
+**Format** (header "Format") maps to `--preset`. The preset sets the output
+canvas; offer these four aspect families and let "Other" cover the rest:
+
+- *Source aspect* (recommended) keeps the animation's native shape. →
+  `--preset source`
+- *YouTube / X (16:9)* landscape 1920x1080. → `--preset youtube`
+- *Stories / Reels / TikTok (9:16)* vertical 1080x1920. → `--preset stories`
+- *Square / Instagram / Telegram (1:1)* 1080x1080. → `--preset square`
+
+For an explicit platform the renderer also accepts `--preset` values `x`,
+`reels`, `tiktok`, `shorts`, `post`, `instagram`, `telegram`, and `portrait`
+(Instagram 4:5, 1080x1350), plus the aspect aliases `16:9`, `9:16`, `1:1`,
+`4:5`. A non-source preset fits the native frame into the new canvas and pads
+the remainder with the scene's own background colour, because a fixed Stage
+cannot reflow its layout to a different aspect ratio. The quality tier then
+scales that canvas (shorter edge to 1080 or 2160).
+
 ## Run it
 
 ```
-node <this-skill>/scripts/render.mjs --input <dir-or-.dc.html> --out <path.mp4>
+node <this-skill>/scripts/render.mjs --input <dir-or-.dc.html> --out <path.mp4> \
+  --quality <original|1080p|4k> --fps <24|30|60> --preset <source|youtube|stories|square|...>
 ```
 
 Useful flags (all optional):
 
 - `--component <Name>` global component to mount, if auto-detection misses it.
-- `--fps <n>` frames per second (default 30). The Stage's own `fps` prop is the
-  right value; the renderer tries to read it from the scene and falls back to 30.
+- `--quality original|1080p|4k` output resolution tier (default `original`).
+- `--fps <n>` frames per second. The Stage's own `fps` prop is the natural value;
+  the renderer reads it from the scene and falls back to 30.
+- `--preset <name>` output canvas/aspect (default `source`); see the list above.
 - `--audio auto|off` default `auto` (capture if the scene makes any sound).
-- `--scale <n>` device pixel ratio, e.g. `2` for a crisp 2x render (default 1).
-- `--crf <n>` x264 quality, lower is better/bigger (default 18).
+- `--bg <color>` pad colour for a reshaped canvas (default: the scene background).
+- `--scale <n>` force the capture device pixel ratio (default: derived from
+  quality, so upscales stay sharp).
+- `--crf <n>` force x264 quality, lower is better/bigger (default: from quality).
 - `--keep` leave the temp work dir (frames, captured audio) for inspection.
 
 The renderer auto-detects width, height, and duration from the mounted Stage, so
