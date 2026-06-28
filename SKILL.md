@@ -8,7 +8,7 @@ description: >-
   "save as mp4/video/movie" a design-canvas animation, motion-graphics film,
   promo, explainer, or animated scene built on the Stage/Sprite engine, and
   ESPECIALLY when the animation has sound that needs to come along, because the
-  canvas's own Share -> Export -> Video drops Web Audio. Trigger on phrases like
+  canvas's own built-in video export drops Web Audio. Trigger on phrases like
   "convert this animation to mp4", "export the promo as a video", "render the
   film with the sound", or "turn the .dc.html into a movie".
 ---
